@@ -40,7 +40,7 @@ function wait_until_all_enabled_wifi_interfaces_are_up() {
 		sleep 30
 	done
 
-	[ $count -le 0 ] && logger "Aborted due to long waiting time"
+	[ $count -le 0 ] && logger -t "${NAME}" -pdaemon.error "Aborted due to long waiting time; check all hanging enabled Wi-Fi interfaces"
 }
 
 function create_own_rrm_nr_list() {
