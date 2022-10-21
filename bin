@@ -4,27 +4,43 @@
 
 NAME=rrm_nr
 
+function get_valid_wifi_iface_list() {
+	function is_802dot11k_nr_enabled() {
+		local uci_option_name="$( uci show wireless | grep ifname=\'${1:?Missing: Wi-Fi interface name}\' | sed "s/wireless.\(.*\).ifname.*/\1/" )"
+
+		local ieee80211k="$( uci -q show wireless.$uci_option_name.ieee80211k | cut -d\' -f2 )"
+		local rrm_neighbor_report="$( uci -q show wireless.$uci_option_name.rrm_neighbor_report | cut -d\' -f2 )"
+
+		( [ "$ieee80211k" == "1" ] && ([ -z "$rrm_neighbor_report" ] || [ "$rrm_neighbor_report" == "1" ]) ) && return 0 || return 1
+	}
+
+	local wifi_iface
+	for wifi_iface in $( ubus list hostapd.* | awk -F. '{ print $2; }' ); do
+		is_802dot11k_nr_enabled "$wifi_iface" && echo $wifi_iface
+	done
+}
+
+function get_ssid() {
+	iwinfo ${1:?Missing: Wi-Fi iface} info | grep ESSID | cut -d\" -f2
+}
+
 # We wrap everything into this function to allow GC by ash, esp. for low-mem devices
 function _do_updates() {
-	local rrm_nr_lists
-
-	OIFS=$IFS
-	IFS=$'\n'
 	# Discover neighbors and self
 	ubus call umdns update
 	sleep 5
-	for wifi_iface in $(ubus list hostapd.* | awk -F. '{ print $2; }'); do
-		local ssid=$(iwinfo ${wifi_iface} info | grep ESSID | cut -d\" -f2)
 
-		# Discover other nodes
-		rrm_nr_lists=""
-
-		for other_iface in $(ubus list hostapd.* | awk -F. '{ print $2; }'); do
-			[ ${wifi_iface} = ${other_iface} ] && continue
-
-			[ ${ssid} = $(iwinfo ${other_iface} info | head -n1 | cut -d\" -f2) ] && rrm_nr_lists="${rrm_nr_lists}"$'\n'"$(/bin/ubus call hostapd.${other_iface} rrm_nr_get_own | /usr/bin/jsonfilter -e '$.value')"
-		done
-
+	local wifi_iface wifi_iface_list="$( get_valid_wifi_iface_list )"
+	for wifi_iface in $wifi_iface_list; do
+		local ssid="$( get_ssid "$wifi_iface" )"
+	
+		function get_internal_rrm_nr_lists() {
+			local other_wifi_iface
+			for other_wifi_iface in $wifi_iface_list; do
+				([ "$wifi_iface" == "$other_wifi_iface" ] || [ "$ssid" != "$( get_ssid "$other_wifi_iface" )" ]) && continue
+				ubus call hostapd.${other_wifi_iface} rrm_nr_get_own | jsonfilter -e '$.value'
+			done
+		}
 
 		function get_external_rrm_nr_lists() {
 			function create_wlan_keys_string() {
@@ -40,33 +56,28 @@ function _do_updates() {
 			local router json_root_string="$( ubus call umdns browse | sed "s/\"txt\": \"\(\([[:alnum:]]\|_\)\+\)=/\"\1\": \"/" | jsonfilter -e '@["_rrm_nr._udp"]' )"
 			eval "$( jsonfilter -s "$json_root_string" -e 'JSON_ROOT_KEYS=$' )"
 			for router in $JSON_ROOT_KEYS; do
-				local json_router_string="$( jsonfilter -s "$json_root_string" -e "@['$router']" )"
-				local external_rrm_nr json_selector="$( create_wlan_keys_string "$( jsonfilter -s "$json_router_string" -e '$.wlan_length' )" )"
-				for external_rrm_nr in $( jsonfilter -s "$json_router_string" -e "@[$json_selector]" | grep "\"${ssid}\""); do
-					rrm_nr_lists="$rrm_nr_lists"$'\n'"$external_rrm_nr"
-				done
+				local json_selector="$( create_wlan_keys_string "$( jsonfilter -s "$json_root_string" -e "@['$router'].wlan_length" )" )"
+				jsonfilter -s "$json_root_string" -e "@['$router'][$json_selector]" | grep "\"${ssid}\""
 			done
 			unset JSON_ROOT_KEYS
-		}; get_external_rrm_nr_lists
+		}
 
-		nr_len=$(echo "${rrm_nr_lists:1}" | wc -l)
-		rrm_nr_lists=$(echo -n "${rrm_nr_lists:1}" | sort -u | tr '\n' ',' )
-		rrm_nr_lists="[${rrm_nr_lists::-1}]"
+		local all_rrm_nr="$( ( get_internal_rrm_nr_lists ; get_external_rrm_nr_lists ) | sort -u | tr '\n' ',' )"
+		all_rrm_nr="[${all_rrm_nr%,}]"
+		local all_rrm_length=$( printf "$all_rrm_nr" | grep -o "$ssid" | wc -l )
 
-		#[[ "${rrm_nr_lists}" == "," ]] && logger -t "rrm_nr" -p daemon.error "${wifi_iface}: no neighbors detected, nothing to do" && continue TODO is logging necessary?
-		#[[ "${rrm_nr_lists}" == "," ]] && continue
+		#[[ "${all_rrm_nr}" == "," ]] && logger -t "rrm_nr" -p daemon.error "${wifi_iface}: no neighbors detected, nothing to do" && continue TODO is logging necessary?
+		#[[ "${all_rrm_nr}" == "," ]] && continue
 
-		#ubus call hostapd.${wifi_iface} bss_mgmt_enable '{"neighbor_report": true}' neighbor_report shoud be enabled in uci TODO skip interface if not set
 		prev_rrm_list="[$(ubus call hostapd.${wifi_iface} rrm_nr_list | jsonfilter -e '@.list[@]' | sort -u | sed ':a;N;$!ba;s/\n/,/g')]"
-		if [ "$(echo -n ${prev_rrm_list} | sed 's: ::g')" = "$(echo -n ${rrm_nr_lists} | sed 's: ::g')" ]; then
+		if [ "$(echo -n ${prev_rrm_list} | sed 's: ::g')" = "$(echo -n ${all_rrm_nr} | sed 's: ::g')" ]; then
 			# Setting a new list will cause the wifi to quickly cycle, which we do not want every 60s
 			continue
 		fi
-		logger -t "rrm_nr" -p daemon.info "${wifi_iface}: Updating neighbor list (number of neighbors: ${nr_len}): ${rrm_nr_lists}"
-		ubus call hostapd.${wifi_iface} rrm_nr_set "{ \"list\": ${rrm_nr_lists} }"
+		logger -t "rrm_nr" -p daemon.info "${wifi_iface}: Updating neighbor list (number of neighbors: ${all_rrm_length}): ${all_rrm_nr}"
+		ubus call hostapd.${wifi_iface} rrm_nr_set "{ \"list\": ${all_rrm_nr} }"
 	done
 
-	IFS=$OIFS
 }
 
 while true; do
