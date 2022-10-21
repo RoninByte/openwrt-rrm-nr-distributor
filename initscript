@@ -37,7 +37,7 @@ start_service() {
 	OIFS=$IFS
 	IFS=$'\x0a'
 
-	for value in $(ubus list hostapd.wlan*); do
+	for value in $(ubus list hostapd.*); do
 		if ! is_802dot11k_nr_enabled "${value#hostapd.}"; then
 			logger -t "${NAME}" -pdaemon.warn "Skipping Wi-Fi interface without 802.11k neighbor reporting enabled: ${value#hostapd.}"
 			continue
