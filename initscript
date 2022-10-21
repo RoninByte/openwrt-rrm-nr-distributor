@@ -21,6 +21,13 @@ function count_enabled_wifi_interfaces() {
 	printf "$(( up_configured - up_disabled ))"
 }
 
+
+function abort_when_no_enabled_wifi_interfaces() {
+	[ $( count_enabled_wifi_interfaces ) -gt 0 ] && return 0
+	logger -t "${NAME}" -pdaemon.error "No enabled Wi-Fi interfaces found"
+	exit 1
+}
+
 function wait_until_all_enabled_wifi_interfaces_are_up() {
 	function are_all_wireless_interfaces_up() {
 		local num_up=$( ubus list hostapd.* | wc -l )
