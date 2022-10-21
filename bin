@@ -38,12 +38,16 @@ function _do_updates() {
 
 				printf "${string:1}"
 			}
-
-			local json_string="$( ubus call umdns browse | sed "s/\"txt\": \"\(\([[:alnum:]]\|_\)\+\)=/\"\1\": \"/" | jsonfilter -e '@["_rrm_nr._udp"][*]' )"
-			local external_rrm_nr json_selector="$( create_wlan_keys_string "$( jsonfilter -s "$json_string" -e '$.wlan_length' )" )"
-			for external_rrm_nr in $( jsonfilter -s "$json_string" -e "@[$json_selector]" | grep "\"${net_ssid}\""); do
-				rrm_nr_lists="$rrm_nr_lists"$'\n'"$external_rrm_nr"
+			local router json_root_string="$( ubus call umdns browse | sed "s/\"txt\": \"\(\([[:alnum:]]\|_\)\+\)=/\"\1\": \"/" | jsonfilter -e '@["_rrm_nr._udp"]' )"
+			eval "$( jsonfilter -s "$json_root_string" -e 'JSON_ROOT_KEYS=$' )"
+			for router in $JSON_ROOT_KEYS; do
+				local json_router_string="$( jsonfilter -s "$json_root_string" -e "@['$router']" )"
+				local external_rrm_nr json_selector="$( create_wlan_keys_string "$( jsonfilter -s "$json_router_string" -e '$.wlan_length' )" )"
+				for external_rrm_nr in $( jsonfilter -s "$json_router_string" -e "@[$json_selector]" | grep "\"${net_ssid}\""); do
+					rrm_nr_lists="$rrm_nr_lists"$'\n'"$external_rrm_nr"
+				done
 			done
+			unset JSON_ROOT_KEYS
 		}; get_external_rrm_nr_lists
 
 		nr_len=$(echo "${rrm_nr_lists:1}" | wc -l)
