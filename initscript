@@ -53,11 +53,6 @@ start_service() {
 	procd_close_instance
 }
 
-boot(){
-	sleep 30
-	start
-}
-
 service_triggers()
 {
 	procd_add_reload_trigger wireless
