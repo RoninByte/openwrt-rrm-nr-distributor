@@ -7,10 +7,18 @@ START=99
 NAME=rrm_nr
 USE_PROCD=1
 
+function is_wifi_interface_enabled() {
+	local num_disabled=$( uci -q show wireless.${1:?Missing: Wi-Fi interface UCI option name} | grep -c ".disabled='1'" )
+	[ $num_disabled -eq 0 ] && return 0 || return 1
+}
+
 function count_enabled_wifi_interfaces() {
-	local count_configured=$( uci -q show wireless | grep wifi-iface | wc -l)
-	local count_disabled=$( uci -q show wireless | grep .disabled='1' | wc -l )
-	printf "$(( count_configured - count_disabled ))"
+	local uci_option_name up_configured=0 up_disabled=0
+	for uci_option_name in $( uci -q show wireless | grep "=wifi-iface" | sed "s/wireless.\(.*\)=wifi-iface/\1/" ); do
+		up_configured=$(( up_configured + 1 ))
+		! is_wifi_interface_enabled "$uci_option_name" && up_disabled=$(( up_disabled + 1 ))
+	done
+	printf "$(( up_configured - up_disabled ))"
 }
 
 function abort_when_no_enabled_wifi_interfaces() {
@@ -31,8 +39,12 @@ function wait_until_all_enabled_wifi_interfaces_are_up() {
 }
 
 function create_own_rrm_nr_list() {
+	function get_wifi_interface_uci_option_name() {
+		uci show wireless | grep ifname=\'${1:?Missing: Wi-Fi interface name}\' | sed "s/wireless.\(.*\).ifname.*/\1/"
+	}
+
 	function is_802dot11k_nr_enabled() {
-		local uci_option_name="$( uci show wireless | grep ifname=\'${1:?Missing: Wi-Fi interface name}\' | sed "s/wireless.\(.*\).ifname.*/\1/" )"
+		local uci_option_name="${1:?Missing: Wi-Fi interface\'s UCI option name}"
 
 		local ieee80211k="$( uci -q show wireless.$uci_option_name.ieee80211k | cut -d\' -f2 )"
 		local rrm_neighbor_report="$( uci -q show wireless.$uci_option_name.rrm_neighbor_report | cut -d\' -f2 )"
@@ -45,9 +57,16 @@ function create_own_rrm_nr_list() {
 
 	local rrm_own
 	for value in $(ubus list hostapd.*); do
-		is_802dot11k_nr_enabled "${value#hostapd.}" \
+		local wifi_ifname=${value#hostapd.}
+		local uci_option_name=$( get_wifi_interface_uci_option_name "$wifi_ifname" )
+
+		! is_wifi_interface_enabled "$uci_option_name" \
+			&& logger -t "${NAME}" -pdaemon.info "Skipping disabled Wi-Fi interface: $wifi_ifname" \
+			&& continue
+
+		is_802dot11k_nr_enabled "$uci_option_name" \
 			&& rrm_own="${rrm_own}|$(/bin/ubus call ${value} rrm_nr_get_own | /usr/bin/jsonfilter -e '$.value')" \
-			|| logger -t "${NAME}" -pdaemon.warn "Skipping Wi-Fi interface without 802.11k neighbor reporting enabled: ${value#hostapd.}"
+			|| logger -t "${NAME}" -pdaemon.warn "Skipping Wi-Fi interface without 802.11k neighbor reporting enabled: $wifi_ifname"
 	done
 
 	IFS=$OIFS
