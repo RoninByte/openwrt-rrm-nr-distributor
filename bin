@@ -54,6 +54,7 @@ function _do_updates() {
 				printf "${string:1}"
 			}
 			local router json_root_string="$( ubus call umdns browse | sed "s/\"txt\": \"\(\([[:alnum:]]\|_\)\+\)=/\"\1\": \"/" | jsonfilter -e '@["_rrm_nr._udp"]' )"
+			[ -z "$json_root_string" ] && return 0
 			eval "$( jsonfilter -s "$json_root_string" -e 'JSON_ROOT_KEYS=$' )"
 			for router in $JSON_ROOT_KEYS; do
 				local json_selector="$( create_wlan_keys_string "$( jsonfilter -s "$json_root_string" -e "@['$router'].wlan_length" )" )"
