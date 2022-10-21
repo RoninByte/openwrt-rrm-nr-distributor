@@ -75,6 +75,7 @@ start_service() {
 	procd_set_param command /bin/sh "/usr/bin/rrm_nr"
 	#https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml?search=5247
 	procd_add_mdns "rrm_nr" "udp" "5247" "$( create_own_rrm_nr_list )"
+	logger -t "${NAME}" -pdaemon.info "Done broadcasting own rrm_nr"
 	procd_close_instance
 }
 
