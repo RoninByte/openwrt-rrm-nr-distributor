@@ -89,7 +89,8 @@ function custom_procd_add_mdns {
 	json_close_object
 	procd_close_data
 
-	logger -t "${NAME}" -pdaemon.info "Broadcasted 802.11k neighbor report list: [${all_rrm_nr:1} ]"
+	local all_rrm_nr_length=$( printf "$all_rrm_nr" | grep -o ", \[" | wc -l )
+	logger -t "${NAME}" -pdaemon.info "Broadcasted Wi-Fi interfaces[$all_rrm_nr_length] with enabled 802.11k NR: [${all_rrm_nr:1} ]"
 }
 
 

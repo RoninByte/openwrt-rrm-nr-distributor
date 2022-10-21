@@ -69,7 +69,7 @@ function _do_updates() {
 		fi
 		local all_rrm_nr_length=$( printf "$all_rrm_nr" | grep -o "$ssid" | wc -l )
 		ubus call hostapd.${wifi_iface} rrm_nr_set "{ \"list\": [$all_rrm_nr] }"
-		logger -t "$NAME" -p daemon.info "Updated rrm_nr_list[$all_rrm_nr_length] of $wifi_iface: $all_rrm_nr"
+		logger -t "$NAME" -p daemon.info "Updated $wifi_iface's 802.11k rrm_nr_list[$all_rrm_nr_length]: [ $all_rrm_nr ]"
 	done
 
 }
