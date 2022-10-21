@@ -7,12 +7,13 @@ START=99
 NAME=rrm_nr
 USE_PROCD=1
 
-function is_wifi_interface_enabled() {
-	local num_disabled=$( uci -q show wireless.${1:?Missing: Wi-Fi interface UCI option name} | grep -c ".disabled='1'" )
-	[ $num_disabled -eq 0 ] && return 0 || return 1
-}
 
 function count_enabled_wifi_interfaces() {
+	function is_wifi_interface_enabled() {
+		local num_disabled=$( uci -q show wireless.${1:?Missing: Wi-Fi interface UCI option name} | grep -c ".disabled='1'" )
+		[ $num_disabled -eq 0 ] && return 0 || return 1
+	}
+
 	local uci_option_name up_configured=0 up_disabled=0
 	for uci_option_name in $( uci -q show wireless | grep "=wifi-iface" | sed "s/wireless.\(.*\)=wifi-iface/\1/" ); do
 		up_configured=$(( up_configured + 1 ))
