@@ -33,10 +33,14 @@ function wait_until_all_enabled_wifi_interfaces_are_up() {
 		local num_up=$( ubus list hostapd.* | wc -l )
 		[ $( count_enabled_wifi_interfaces ) -eq $num_up ] && return 0 || return 1
 	}
-	while ! are_all_wireless_interfaces_up; do
+	local count=6
+	while [ $count -gt 0 ] && ! are_all_wireless_interfaces_up; do
 		logger -t "${NAME}" -pdaemon.info "Waiting for all Wi-Fi interfaces to initialize"
+		count=$(( count - 1 ))
 		sleep 30
 	done
+
+	[ $count -le 0 ] && logger "Aborted due to long waiting time"
 }
 
 function create_own_rrm_nr_list() {
