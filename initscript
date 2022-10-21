@@ -7,16 +7,18 @@ START=99
 NAME=rrm_nr
 USE_PROCD=1
 
-function count_enabled_wifi_interfaces() {
-	local count_configured=$( uci -q show wireless | grep wifi-iface | wc -l)
-	local count_disabled=$( uci -q show wireless | grep .disabled='1' | wc -l )
-	printf "$(( count_configured - count_disabled ))"
+function is_wifi_interface_enabled() {
+	local num_disabled=$( uci -q show wireless.${1:?Missing: Wi-Fi interface UCI option name} | grep -c ".disabled='1'" )
+	[ $num_disabled -eq 0 ] && return 0 || return 1
 }
 
-function abort_when_no_enabled_wifi_interfaces() {
-	[ $( count_enabled_wifi_interfaces ) -gt 0 ] && return 0
-	logger -t "${NAME}" -pdaemon.error "No enabled Wi-Fi interfaces found"
-	exit 1
+function count_enabled_wifi_interfaces() {
+	local uci_option_name up_configured=0 up_disabled=0
+	for uci_option_name in $( uci -q show wireless | grep "=wifi-iface" | sed "s/wireless.\(.*\)=wifi-iface/\1/" ); do
+		up_configured=$(( up_configured + 1 ))
+		! is_wifi_interface_enabled "$uci_option_name" && up_disabled=$(( up_disabled + 1 ))
+	done
+	printf "$(( up_configured - up_disabled ))"
 }
 
 function wait_until_all_enabled_wifi_interfaces_are_up() {
