@@ -16,15 +16,23 @@ function is_802dot11k_nr_enabled() {
 	( [ "$ieee80211k" == "1" ] && ([ -z "$rrm_neighbor_report" ] || [ "$rrm_neighbor_report" == "1" ]) ) && return 0 || return 1
 }
 
+function are_all_wireless_interfaces_up() {
+	local count_configured=$( uci show wireless | grep wifi-iface | wc -l)
+	local count_up=$( ubus list hostapd.* | wc -l )
+	local count_disabled=$( uci show wireless | grep .disabled='1' | wc -l )
+
+	[ $(( count_configured - count_disabled  )) -eq $count_up ] && return 0 || return 1
+}
+
 start_service() {
 	#[ ! -f /etc/config/wireless ] && logger -t "${NAME}" -pdaemon.error "/etc/config/wireless does not exist" && exit 1
 	#[ $(grep -q 'wifi-iface' /etc/config/wireless) ] && logger -t "${NAME}" -pdaemon.error "/etc/config/wireless does not have any wifi-iface stanzas" && exit 1
 
 	local rrm_own
-	#while [ "$(ubus list hostapd.wlan* | wc -l)" != "$(grep 'wifi-iface' /etc/config/wireless | wc -l)" ]; do
-	#	logger -t "${NAME}" -pdaemon.info "Waiting for all interfaces to initialize"
-	#	sleep 30
-	#done
+	while ! are_all_wireless_interfaces_up; do
+		logger -t "${NAME}" -pdaemon.info "Waiting for all Wi-Fi interfaces to initialize"
+		sleep 30
+	done
 
 	OIFS=$IFS
 	IFS=$'\x0a'
