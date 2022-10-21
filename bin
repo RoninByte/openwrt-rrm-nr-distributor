@@ -1,6 +1,6 @@
 #!/bin/sh
-#file: /usr/bin/rrm_nr
-#based on: https://forum.openwrt.org/t/how-does-rrm-work/32635/73
+#File: /usr/bin/rrm_nr
+#Forked from: https://github.com/simonyiszk/openwrt-rrm-nr-distributor
 
 NAME=rrm_nr
 
@@ -62,7 +62,6 @@ function _do_updates() {
 		}
 
 		local all_rrm_nr="$( ( get_internal_rrm_nr_lists ; get_external_rrm_nr_lists ) | sort -u | tr '\n' ',' | sed "s/,$//" )"
-
 		local old_all_rrm_nr="$( ubus call hostapd.$wifi_iface rrm_nr_list | jsonfilter -e '@.list[@]' | sort -u | tr '\n' ',' | sed "s/,$//" )"
 		if [ "$old_all_rrm_nr" == "$all_rrm_nr" ]; then
 			# Setting a new list will cause the wifi to quickly cycle, which we do not want every 60s
@@ -70,7 +69,7 @@ function _do_updates() {
 		fi
 		local all_rrm_nr_length=$( printf "$all_rrm_nr" | grep -o "$ssid" | wc -l )
 		ubus call hostapd.${wifi_iface} rrm_nr_set "{ \"list\": [$all_rrm_nr] }"
-		logger -t "rrm_nr" -p daemon.info "Updated rrm_nr_list[$all_rrm_nr_length] of $wifi_iface: $all_rrm_nr"
+		logger -t "$NAME" -p daemon.info "Updated rrm_nr_list[$all_rrm_nr_length] of $wifi_iface: $all_rrm_nr"
 	done
 
 }
