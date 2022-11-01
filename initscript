@@ -102,6 +102,8 @@ start_service() {
 	procd_set_param command /bin/sh "/usr/bin/rrm_nr"
 	custom_procd_add_mdns
 	procd_close_instance
+
+	/etc/init.d/umdns restart
 }
 
 
