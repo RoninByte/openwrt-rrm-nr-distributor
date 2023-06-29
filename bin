@@ -1,4 +1,4 @@
-#File: /usr/bin/update_rrm_nr
+#Destination file: /usr/bin/update_rrm_nr
 #!/bin/sh
 #Forked from: https://github.com/simonyiszk/openwrt-rrm-nr-distributor
 

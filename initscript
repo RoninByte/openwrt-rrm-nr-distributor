@@ -1,4 +1,4 @@
-#File: /etc/init.d/update_rrm_nr
+#Destination file: /etc/init.d/update_rrm_nr
 #!/bin/sh /etc/rc.common
 #Forked from: https://github.com/simonyiszk/openwrt-rrm-nr-distributor
 
