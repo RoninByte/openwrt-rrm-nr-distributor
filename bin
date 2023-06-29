@@ -1,8 +1,8 @@
+#File: /usr/bin/update_rrm_nr
 #!/bin/sh
-#File: /usr/bin/rrm_nr
 #Forked from: https://github.com/simonyiszk/openwrt-rrm-nr-distributor
 
-NAME=rrm_nr
+readonly NAME=update_rrm_nr
 
 function get_valid_wifi_iface_list() {
 	function is_802dot11k_nr_enabled() {

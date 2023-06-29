@@ -1,10 +1,10 @@
+#File: /etc/init.d/update_rrm_nr
 #!/bin/sh /etc/rc.common
-#File: /etc/init.d/rrm_nr
 #Forked from: https://github.com/simonyiszk/openwrt-rrm-nr-distributor
 
-NAME=rrm_nr
-USE_PROCD=1
-START=99
+readonly NAME=update_rrm_nr
+readonly USE_PROCD=1
+readonly START=99
 
 
 function count_enabled_wifi_interfaces() {
@@ -51,7 +51,7 @@ function custom_procd_add_mdns {
 
 	function create_header() {
 		#https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml?search=5247
-		local service="rrm_nr" protocol="udp" port="5247"
+		local service="$NAME" protocol="udp" port="5247"
 		json_add_object "${service}_$port"
 		json_add_string "service" "_$service._$protocol.local"
 		json_add_int port "$port"
@@ -99,7 +99,7 @@ start_service() {
 	wait_until_all_enabled_wifi_interfaces_are_up
 
 	procd_open_instance
-	procd_set_param command /bin/sh "/usr/bin/rrm_nr"
+	procd_set_param command /bin/sh "/usr/bin/$NAME"
 	custom_procd_add_mdns
 	procd_close_instance
 
