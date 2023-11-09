@@ -20,10 +20,10 @@ function install_service() {
 
     service $service_name stop &> /dev/null
 
-    local -r tmp_file="$( mktemp )"
-    local -r backup_config_file="/etc/sysupgrade.conf"
+    local tmp_file="$( mktemp )"
+    local backup_config_file="/etc/sysupgrade.conf"
 
-    local -r source_url="https://github.com/pdsakurai/openwrt-rrm-nr-distributor/raw/main"
+    local source_url="https://github.com/pdsakurai/openwrt-rrm-nr-distributor/raw/main"
     local item=
     for item in bin initscript; do
         wget "$source_url/$item" -qO "$tmp_file"
