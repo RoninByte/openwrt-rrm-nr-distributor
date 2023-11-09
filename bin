@@ -24,8 +24,18 @@ function get_ssid() {
 	iwinfo ${1:?Missing: Wi-Fi iface} info | grep ESSID | cut -d\" -f2
 }
 
+function restart_or_update_umdns() {
+	if [ -z "$( ubus call umdns browse | jsonfilter -e '@["_update_rrm_nr._udp"]' )" ]; then
+		# For unknown reason, umdns doesn't publish anything with this error visible in logs: "do_page_fault(): sending SIGSEGV to umdns for invalid write access to 00000004".
+		service umdns restart
+		logger -t "$NAME" -p daemon.warn "Restarted umdns service as nothing is getting published."
+	else
+		ubus call umdns update
+	fi
+}
+
 function _do_updates() {
-	ubus call umdns update
+	restart_or_update_umdns
 	sleep 5
 
 	local wifi_iface wifi_iface_list="$( get_valid_wifi_iface_list )"
