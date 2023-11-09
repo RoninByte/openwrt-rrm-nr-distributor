@@ -19,9 +19,10 @@ function install_prerequisite_pkg() {
 
 function enable_and_start_service() {
     local service_name="${1:?Missing: Service name}"
+    local command="service \"$service_name\""
 
-    service "$service_name" enable
-    service "$service_name" start
+    $command enabled || $command enable
+    $command running || $command start
     log "Done enabling and starting service: $service_name"
 }
 
