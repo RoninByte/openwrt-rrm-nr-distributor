@@ -1,11 +1,11 @@
 #!/bin/sh
 
-readonly service_name="update_rrm_nr"
+readonly SERVICE_NAME="update_rrm_nr"
 
 function log() {
     local text="${1:?Missing: Text}"
 
-    logger -t "$service_name" -p daemon.info "$text"
+    logger -t "$SERVICE_NAME" -p daemon.info "$text"
     echo "$text"
 }
 
@@ -27,7 +27,7 @@ function enable_and_start_service() {
 
 function install_service() {
 
-    service "$service_name" stop &> /dev/null
+    service "$SERVICE_NAME" stop &> /dev/null
 
     local tmp_file="$( mktemp )"
     local backup_config_file="/etc/sysupgrade.conf"
@@ -52,7 +52,7 @@ function install_service() {
 
     install_prerequisite_pkg "umdns"
     enable_and_start_service "umdns"
-    enable_and_start_service "$service_name"
+    enable_and_start_service "$SERVICE_NAME"
 
     log "Installation completed successfully."
 }
