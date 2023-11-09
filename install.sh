@@ -18,7 +18,7 @@ function enable_and_start_service() {
 function install_service() {
     local service_name="update_rrm_nr"
 
-    service $service_name stop &> /dev/null
+    service "$service_name" stop &> /dev/null
 
     local tmp_file="$( mktemp )"
     local backup_config_file="/etc/sysupgrade.conf"
@@ -37,7 +37,8 @@ function install_service() {
         echo "" > "$tmp_file"
     done
 
-    install_prerequisite_pkg "umdns" && enable_and_start_service "umdns"
+    install_prerequisite_pkg "umdns"
+    enable_and_start_service "umdns"
     enable_and_start_service "$service_name"
 
     local log="Installation completed successfully."
