@@ -19,16 +19,16 @@ function install_prerequisite_pkg() {
 
 function enable_and_start_service() {
     local service_name="${1:?Missing: Service name}"
-    local command="service \"$service_name\""
+    local command="service $service_name"
 
     $command enabled || $command enable
-    $command running || $command start
+    $command running && $command restart || $command start 
     log "Done enabling and starting service: $service_name"
 }
 
 function install_service() {
 
-    service "$SERVICE_NAME" stop &> /dev/null
+    service $SERVICE_NAME stop &> /dev/null
 
     local tmp_file="$( mktemp )"
     local backup_config_file="/etc/sysupgrade.conf"
