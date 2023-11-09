@@ -9,7 +9,7 @@ function install_prerequisite_pkg() {
 }
 
 function enable_and_start_service() {
-    local service_name="${1:Missing: Service name}"
+    local service_name="${1:?Missing: Service name}"
 
     service "$service_name" enable
     service "$service_name" start
@@ -43,6 +43,6 @@ function install_service() {
     local log="Installation completed successfully."
     logger -t "$service_name" -p daemon.info "$log"
     echo "$log"
-};
+}
 
 install_service
