@@ -1,0 +1,153 @@
+#!/bin/sh
+# shellcheck disable=1091,2154 external-sources=false extended-analysis=false shell=bash
+. /lib/functions.sh
+readonly NAME=rrm_nr
+
+get_valid_wifi_iface_list() {
+  is_802dot11k_nr_enabled() {
+    load_sections() {
+      local config ssid device _ssid _device ieee80211k
+      config="$1"
+      ssid="$2"
+      device="${3/phy/radio}"
+      config_get _ssid "$config" ssid
+      config_get _device "$config" device
+      config_get disabled "$config" disabled 0
+      config_get ieee80211k "$config" ieee80211k 0
+
+      [ "$disabled" = "0" ] && [ "$ieee80211k" = "1" ] && [ "$ssid" = "$_ssid" ] && [ "$device" = "$_device" ] && _is_802dot11k_nr_enabled=true
+    }
+
+    local ssid phy _is_802dot11k_nr_enabled
+    ssid=$1
+    phy=$2
+    _is_802dot11k_nr_enabled=false
+
+    config_load wireless
+    config_foreach load_sections wifi-iface "$ssid" "$phy"
+    $_is_802dot11k_nr_enabled
+  }
+
+  local wifi_iface
+  for iface in $(ubus list hostapd.*); do
+    eval "$(ubus -v call "$iface" get_status | jsonfilter -e ssid='$.ssid' -e phy='$.phy')"
+    is_802dot11k_nr_enabled "$ssid" "$phy" && echo "${iface/hostapd./}"
+  done
+}
+
+get_ssid() {
+  iwinfo "${1:?Missing: Wi-Fi iface}" info | grep ESSID | cut -d\" -f2
+}
+
+restart_or_update_umdns() {
+  if [ -z "$(ubus call umdns browse | jsonfilter -e '@["_'"$NAME"'._udp"]' )" ]; then
+    # For unknown reason, umdns doesn't publish anything with this error visible in logs: "do_page_fault(): sending SIGSEGV to umdns for invalid write access to 00000004".
+    service umdns restart
+    logger -t "$NAME" -p daemon.warn "Restarted umdns service as nothing is getting published."
+  else
+    ubus call umdns update
+  fi
+}
+
+_do_updates() {
+  restart_or_update_umdns
+  sleep 5
+
+  local wifi_iface
+  local wifi_iface_list
+
+  wifi_iface_list="$(get_valid_wifi_iface_list)"
+
+  for wifi_iface in $wifi_iface_list; do
+    local ssid
+    ssid="$(get_ssid "$wifi_iface")"
+
+    get_internal_rrm_nr_lists() {
+      local other_wifi_iface
+      for other_wifi_iface in $wifi_iface_list; do
+        { [ "$wifi_iface" == "$other_wifi_iface" ] || [ "$ssid" != "$(get_ssid "$other_wifi_iface")" ]; } && continue
+        ubus call hostapd."${other_wifi_iface}" rrm_nr_get_own | jsonfilter -e '$.value'
+      done
+    }
+
+    get_external_rrm_nr_lists() {
+
+      create_wlan_keys_string() {
+        local string
+        local current
+        local count
+
+        current=0
+        count=${1:?Missing: Number of keys}
+
+        while [ "$current" -lt "$count" ]; do
+          string="$string,\"wlan$current\""
+          current=$((current + 1))
+        done
+
+        printf "%s" "${string:1}"
+      }
+
+      local router json_root_string
+      json_root_string="$(ubus call umdns browse | sed "s/\"txt\": \"\(\([[:alnum:]]\|_\)\+\)=/\"\1\": \"/" | jsonfilter -e '@["_'$NAME'._udp"]')"
+
+      [ -z "$json_root_string" ] && return 0
+
+      eval "$(jsonfilter -s "$json_root_string" -e 'JSON_ROOT_KEYS=$')"
+
+      for router in $JSON_ROOT_KEYS; do
+        local json_selector
+        json_selector="$(create_wlan_keys_string "$(jsonfilter -s "$json_root_string" -e "@['$router'].wlan_length")")"
+        jsonfilter -s "$json_root_string" -e "@['$router'][$json_selector]" | grep "\"${ssid}\""
+      done
+
+      unset JSON_ROOT_KEYS
+    }
+
+    local all_rrm_nr
+    local old_all_rrm_nr
+    local all_rrm_nr_length
+
+    all_rrm_nr="$( (
+      get_internal_rrm_nr_lists
+      get_external_rrm_nr_lists
+    ) | sort -u | tr '\n' ',' | sed "s/,$//")"
+
+    old_all_rrm_nr="$(ubus call hostapd."$wifi_iface" rrm_nr_list | jsonfilter -e '@.list[@]' | sort -u | tr '\n' ',' | sed "s/,$//")"
+
+    if [ "$old_all_rrm_nr" == "$all_rrm_nr" ]; then
+      # Setting a new list will cause the wifi to quickly cycle, which we do not want every 60s
+      continue
+    fi
+
+    all_rrm_nr_length=$(echo "$all_rrm_nr" | grep -o "$ssid" | wc -l)
+    ubus call hostapd."${wifi_iface}" rrm_nr_set "{ \"list\": [$all_rrm_nr] }"
+    logger -t "$NAME" -p daemon.info "Updated $wifi_iface's 802.11k rrm_nr_list[$all_rrm_nr_length]: [ $all_rrm_nr ]"
+  done
+
+}
+
+# This is an alternate approach to the original "sleep 60" in the while loop below.
+# The issue with "sleep 60" is that the rrm_nr service will not exit cleanly because
+# by default it only waits up to 5 seconds for this script to exit. But because the while
+# loop is sleeping, it fails to exit cleanly because procd sends a SIGKILL which cannot be
+# trapped.
+
+# Set the delay_counter to 20 initially so we immediately execute do_updates upon entering
+# the while loop. Then subsequently set the counter back to 0 and begin incrementing every
+# 3 seconds until we reach 20 iterations again (=60 seconds between do_updates calls).
+# In this way, procd can actually signal a clean exit since this will become responsive again
+# every 3 seconds now.
+delay_counter=20
+while true; do
+  if [ "$delay_counter" -eq 20 ]; then
+    _do_updates
+    delay_counter=0
+  else
+    delay_counter=$((delay_counter + 1))
+  fi
+
+  sleep 3
+done
+
+exit 0
