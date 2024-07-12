@@ -101,7 +101,6 @@ custom_procd_add_mdns() {
   local all_rrm_nr_length
   all_rrm_nr_length=$(echo "$all_rrm_nr" | grep -o ", \[" | wc -l)
   logger -t "${NAME}" -p daemon.info "Broadcasted Wi-Fi interfaces[$all_rrm_nr_length] with enabled 802.11k NR: [${all_rrm_nr:1} ]"
-  logger -t "${NAME}" -p daemon.info "$MSG_JSON"
 }
 
 _procd_add_mdns() {
@@ -115,7 +114,6 @@ _procd_add_mdns() {
 start_service() {
   check_wifi
   wait_for_wifi
-
   procd_open_instance
   procd_set_param command /bin/sh "/usr/bin/$NAME"
   _procd_add_mdns "$@"
