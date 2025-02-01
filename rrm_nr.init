@@ -5,77 +5,24 @@ NAME=rrm_nr
 USE_PROCD=1
 START=99
 
-count_enabled_wifi_interfaces() {
-  local up_configured
-  up_configured=0
-
-  is_wifi_interface_enabled() {
-    local config disabled mode
-    config="$1"
-    config_get disabled "$config" disabled 0
-    config_get mode "$config" mode
-
-    [ "$disabled" -eq 0 ] && [ "$mode" = "ap" ] && up_configured=$((up_configured + 1))
-  }
-
-  config_load wireless
-  config_foreach is_wifi_interface_enabled wifi-iface
-
-  echo "$up_configured"
-}
-
-check_wifi() {
-  [ $(count_enabled_wifi_interfaces) -gt 0 ] && return 0
-  logger -t "${NAME}" -pdaemon.error "No enabled Wi-Fi interfaces found"
+{ [ -r /lib/functions/rrm_nr.sh ] && . /lib/functions/rrm_nr.sh; } || {
+  echo "Error: Missing rrm_nr_common.sh file"
   exit 1
-}
-
-wait_for_wifi() {
-  are_all_wireless_interfaces_up() {
-    local num_up
-    num_up=$(ubus list hostapd.* | wc -l)
-    count=$(count_enabled_wifi_interfaces)
-    [ "$(count_enabled_wifi_interfaces)" -eq "$num_up" ] && return 0
-  }
-
-  local max=6 n=1
-  while [ $n -le $max ] && ! are_all_wireless_interfaces_up; do
-    logger -t "${NAME}" -pdaemon.info "Waiting for all Wi-Fi interfaces to initialize (Run: $n/$max)"
-    n=$((n + 1))
-    sleep 30
-  done
-
-  [ $max -eq $n ] && logger -t "${NAME}" -pdaemon.error "Aborted due to long waiting time; check all hanging enabled Wi-Fi interfaces"
-}
-
-is_802dot11k_nr_enabled() {
-  load_sections() {
-    local config ssid device _ssid _device ieee80211k
-    config="$1"
-    ssid="$2"
-    device="${3/phy/radio}"
-    config_get _ssid "$config" ssid
-    config_get _device "$config" device
-    config_get disabled "$config" disabled 0
-    config_get ieee80211k "$config" ieee80211k 0
-
-    [ "$disabled" = "0" ] && [ "$ieee80211k" = "1" ] && [ "$ssid" = "$_ssid" ] && [ "$device" = "$_device" ] && is_802dot11k_nr_enabled=true
-  }
-
-  ssid=$1
-  phy=$2
-  is_802dot11k_nr_enabled=false
-  config_load wireless
-  config_foreach load_sections wifi-iface "$ssid" "$phy"
-  $is_802dot11k_nr_enabled
 }
 
 custom_procd_add_mdns() {
   local all_rrm_nr
   local iface
   local length
+  local all_rrm_nr_length
+  local service
+  local proto
+  local port
 
-  local service="$NAME" proto="udp" port="5247"
+  service="$NAME"
+  proto="udp"
+  port="5247"
+
   json_add_object "${service}_$port"
   json_add_string "service" "_$service._$proto.local"
   json_add_int port "$port"
@@ -96,11 +43,8 @@ custom_procd_add_mdns() {
   [ $length -gt 0 ] && json_select ..
 
   json_select ..
-  MSG_JSON=$(json_dump)
-
-  local all_rrm_nr_length
   all_rrm_nr_length=$(echo "$all_rrm_nr" | grep -o ", \[" | wc -l)
-  logger -t "${NAME}" -p daemon.info "Broadcasted Wi-Fi interfaces[$all_rrm_nr_length] with enabled 802.11k NR: [${all_rrm_nr:1} ]"
+  log_message 3 "Broadcasted Wi-Fi interfaces[$all_rrm_nr_length] with enabled 802.11k NR: [${all_rrm_nr:1} ]"
 }
 
 _procd_add_mdns() {
