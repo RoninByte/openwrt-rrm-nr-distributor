@@ -11,10 +11,10 @@ log() {
 
 install_prerequisite_pkg() {
   local pkg_name="${1:?Missing: Package name}"
-  [ $(opkg list-installed | grep -c "$pkg_name") -ge 1 ] && return 0
+  [ $(apk info | grep -c "$pkg_name") -ge 1 ] && return 0
 
-  opkg update
-  opkg install "$pkg_name" && log "Done installing: $pkg_name"
+  apk update
+  apk add "$pkg_name" && log "Done installing: $pkg_name"
 }
 
 enable_and_start_service() {
